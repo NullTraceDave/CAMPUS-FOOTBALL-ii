@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FUO Campus Prediction</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+:root{
+  --green:#065f46;
+  --accent:#22c55e;
+  --bg:#ecfeff;
+  --danger:#dc2626;
+}
+*{box-sizing:border-box;font-family:system-ui}
+body{margin:0;background:linear-gradient(135deg,#ecfeff,#f0fdf4)}
+header{
+  background:linear-gradient(135deg,#064e3b,#16a34a);
+  color:white;text-align:center;padding:1.8rem
+}
+header h1{margin:0;font-size:1.9rem}
+header p{margin:.3rem 0 0;font-size:.95rem}
+main{max-width:900px;margin:auto;padding:1.2rem}
+.card{
+  background:white;border-radius:16px;
+  padding:1.4rem;margin-bottom:1.4rem;
+  box-shadow:0 15px 35px rgba(0,0,0,.08)
+}
+label{display:block;margin-top:1rem;font-weight:600}
+input,select{
+  width:100%;padding:.7rem;margin-top:.4rem;
+  border-radius:10px;border:1px solid #cbd5e1
+}
+button{
+  margin-top:1.2rem;width:100%;
+  padding:.85rem;border:none;border-radius:14px;
+  background:linear-gradient(135deg,#16a34a,#22c55e);
+  color:white;font-size:1rem;font-weight:700;cursor:pointer
+}
+button.danger{background:#dc2626}
+button.secondary{background:#0f766e}
+small{color:#64748b}
+.hidden{display:none}
+.match-box{border-bottom:1px solid #e5e7eb;padding:.7rem}
+.admin-tools{margin-top:.5rem}
+footer{text-align:center;font-size:.8rem;color:#64748b;padding:1rem}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>⚽ Campus Match Prediction</h1>
+  <p>Federal University Otuoke, Bayelsa State</p>
+  <small>FUO Campus Prediction Contest</small>
+</header>
+
+<main>
+
+<!-- MATCHES -->
+<div class="card">
+  <h2>Available Matches</h2>
+  <div id="matchList"></div>
+</div>
+
+<!-- PREDICTION FORM -->
+<div class="card">
+  <h2>Submit Prediction</h2>
+  <form id="predictForm">
+    <label>Select Match</label>
+    <select id="matchId" required></select>
+
+    <label>Full Name</label>
+    <input id="name" required>
+
+    <label>Phone Number</label>
+    <input id="phone" required>
+
+    <label>Prediction</label>
+    <select id="prediction" required>
+      <option>Team A Wins</option>
+      <option>Team B Wins</option>
+      <option>Draw</option>
+    </select>
+
+    <label>Entry Fee</label>
+    <select id="amount" required>
+      <option value="500">₦500</option>
+      <option value="1000">₦1000</option>
+      <option value="2000">₦2000</option>
+    </select>
+
+    <button>Submit Prediction</button>
+  </form>
+</div>
+
+<!-- ADMIN -->
+<div class="card">
+  <h2>Admin Panel</h2>
+  <input id="adminPin" placeholder="Enter Admin PIN">
+  <button class="secondary" onclick="unlockAdmin()">Unlock</button>
+
+  <div id="adminArea" class="hidden">
+    <label>Team A</label><input id="teamA">
+    <label>Team B</label><input id="teamB">
+    <label>Kickoff</label><input type="datetime-local" id="kickoff">
+    <label>Prediction Deadline</label><input type="datetime-local" id="deadline">
+    <button onclick="addMatch()">Add Match</button>
+  </div>
+</div>
+
+</main>
+
+<footer>
+© 2026 FUO Campus Prediction • Not a betting platform
+</footer>
+
+<script>
+const ADMIN_PIN="1234"; // CHANGE THIS
+let adminUnlocked=false;
+
+let matches=JSON.parse(localStorage.getItem("matches")||"[]");
+let predictions=JSON.parse(localStorage.getItem("predictions")||"[]");
+
+function save(){
+ localStorage.setItem("matches",JSON.stringify(matches));
+ localStorage.setItem("predictions",JSON.stringify(predictions));
+}
+
+function unlockAdmin(){
+ if(adminPin.value===ADMIN_PIN){
+  adminUnlocked=true;
+  adminArea.classList.remove("hidden");
+  render();
+ } else alert("Wrong PIN");
+}
+
+function addMatch(){
+ matches.push({
+  id:Date.now(),
+  a:teamA.value,
+  b:teamB.value,
+  kickoff:kickoff.value,
+  deadline:deadline.value,
+  completed:false
+ });
+ save();render();
+}
+
+function deleteMatch(id){
+ if(!confirm("Delete this match?")) return;
+ matches=matches.filter(m=>m.id!==id);
+ predictions=predictions.filter(p=>p.match!==id);
+ save();render();
+}
+
+function submitScore(id){
+ const aScore=document.getElementById(`sa-${id}`).value;
+ const bScore=document.getElementById(`sb-${id}`).value;
+ if(aScore===""||bScore==="") return alert("Enter scores");
+
+ const match=matches.find(m=>m.id===id);
+ match.scoreA=aScore;
+ match.scoreB=bScore;
+ match.result=
+  aScore>bScore?"Team A Wins":
+  bScore>aScore?"Team B Wins":"Draw";
+ match.completed=true;
+
+ save();render();
+}
+
+function render(){
+ matchList.innerHTML="";
+ matchId.innerHTML="";
+
+ matches.forEach(m=>{
+  const closed=new Date()>new Date(m.deadline)||m.completed;
+
+  matchList.innerHTML+=`
+   <div class="match-box">
+    <strong>${m.a} vs ${m.b}</strong><br>
+    <small>Kickoff: ${new Date(m.kickoff).toLocaleString()}</small><br>
+    ${m.completed?`<strong>Final Score: ${m.scoreA} - ${m.scoreB}</strong>`:""}
+
+    ${adminUnlocked?`
+    <div class="admin-tools">
+     <input id="sa-${m.id}" type="number" placeholder="${m.a} score">
+     <input id="sb-${m.id}" type="number" placeholder="${m.b} score">
+     <button onclick="submitScore(${m.id})">Submit Result</button>
+     <button class="danger" onclick="deleteMatch(${m.id})">Delete Match</button>
+    </div>`:""}
+   </div>`;
+
+  if(!closed){
+   matchId.innerHTML+=`<option value="${m.id}">${m.a} vs ${m.b}</option>`;
+  }
+ });
+}
+
+predictForm.onsubmit=e=>{
+ e.preventDefault();
+ const m=matches.find(x=>x.id==matchId.value);
+ if(!m||new Date()>new Date(m.deadline)||m.completed)
+  return alert("Predictions closed");
+
+ predictions.push({
+  match:m.id,
+  name:name.value,
+  phone:phone.value,
+  prediction:prediction.value,
+  amount:amount.value
+ });
+ save();
+ alert("Prediction submitted successfully!");
+};
+
+render();
+</script>
+
+</body>
+</html>
