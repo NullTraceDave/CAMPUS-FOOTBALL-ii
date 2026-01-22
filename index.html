@@ -20,7 +20,7 @@ header{
 }
 header h1{margin:0;font-size:1.9rem}
 header p{margin:.3rem 0 0;font-size:.95rem}
-main{max-width:900px;margin:auto;padding:1.2rem}
+main{max-width:1000px;margin:auto;padding:1.2rem}
 .card{
   background:white;border-radius:16px;
   padding:1.4rem;margin-bottom:1.4rem;
@@ -32,16 +32,17 @@ input,select{
   border-radius:10px;border:1px solid #cbd5e1
 }
 button{
-  margin-top:1.2rem;width:100%;
+  margin-top:1rem;width:100%;
   padding:.85rem;border:none;border-radius:14px;
   background:linear-gradient(135deg,#16a34a,#22c55e);
   color:white;font-size:1rem;font-weight:700;cursor:pointer
 }
-button.danger{background:#dc2626}
 button.secondary{background:#0f766e}
+button.danger{background:#dc2626}
 small{color:#64748b}
 .hidden{display:none}
 .match-box{border-bottom:1px solid #e5e7eb;padding:.7rem}
+.slip-item{padding:.6rem;border-bottom:1px dashed #e5e7eb}
 .admin-tools{margin-top:.5rem}
 footer{text-align:center;font-size:.8rem;color:#64748b;padding:1rem}
 </style>
@@ -63,35 +64,45 @@ footer{text-align:center;font-size:.8rem;color:#64748b;padding:1rem}
   <div id="matchList"></div>
 </div>
 
-<!-- PREDICTION FORM -->
+<!-- PREDICTION SLIP -->
 <div class="card">
-  <h2>Submit Prediction</h2>
-  <form id="predictForm">
-    <label>Select Match</label>
-    <select id="matchId" required></select>
+  <h2>Prediction Slip</h2>
 
-    <label>Full Name</label>
-    <input id="name" required>
+  <label>Select Match</label>
+  <select id="matchSelect"></select>
 
-    <label>Phone Number</label>
-    <input id="phone" required>
+  <label>Prediction</label>
+  <select id="predictionSelect">
+    <option>Team A Wins</option>
+    <option>Team B Wins</option>
+    <option>Draw</option>
+  </select>
 
-    <label>Prediction</label>
-    <select id="prediction" required>
-      <option>Team A Wins</option>
-      <option>Team B Wins</option>
-      <option>Draw</option>
-    </select>
+  <button onclick="addToSlip()">Add To Slip</button>
 
-    <label>Entry Fee</label>
-    <select id="amount" required>
-      <option value="500">₦500</option>
-      <option value="1000">₦1000</option>
-      <option value="2000">₦2000</option>
-    </select>
+  <div id="slip"></div>
 
-    <button>Submit Prediction</button>
-  </form>
+  <label>Full Name</label>
+  <input id="name">
+
+  <label>Phone Number</label>
+  <input id="phone">
+
+  <label>Entry Fee</label>
+  <select id="amount">
+    <option value="500">₦500</option>
+    <option value="1000">₦1000</option>
+    <option value="2000">₦2000</option>
+  </select>
+
+  <button onclick="submitBooking()">Generate Booking Code & Pay</button>
+</div>
+
+<!-- LOAD BOOKING -->
+<div class="card">
+  <h2>Load Booking Code</h2>
+  <input id="loadCode" placeholder="Enter booking code">
+  <button class="secondary" onclick="loadBooking()">Load Slip</button>
 </div>
 
 <!-- ADMIN -->
@@ -116,17 +127,25 @@ footer{text-align:center;font-size:.8rem;color:#64748b;padding:1rem}
 </footer>
 
 <script>
-const ADMIN_PIN="1234"; // CHANGE THIS
+/* ================= CONFIG ================= */
+const ADMIN_PIN="1234"; // CHANGE PIN HERE
+const PAYMENT_LINK="https://example.com/pay"; // PUT PAYSTACK / FLUTTERWAVE LINK
+
 let adminUnlocked=false;
-
 let matches=JSON.parse(localStorage.getItem("matches")||"[]");
-let predictions=JSON.parse(localStorage.getItem("predictions")||"[]");
+let bookings=JSON.parse(localStorage.getItem("bookings")||"{}");
+let slip=[];
 
+/* ================= UTIL ================= */
 function save(){
  localStorage.setItem("matches",JSON.stringify(matches));
- localStorage.setItem("predictions",JSON.stringify(predictions));
+ localStorage.setItem("bookings",JSON.stringify(bookings));
+}
+function bookingCode(){
+ return "FUO-"+Math.floor(100000+Math.random()*900000);
 }
 
+/* ================= ADMIN ================= */
 function unlockAdmin(){
  if(adminPin.value===ADMIN_PIN){
   adminUnlocked=true;
@@ -134,7 +153,6 @@ function unlockAdmin(){
   render();
  } else alert("Wrong PIN");
 }
-
 function addMatch(){
  matches.push({
   id:Date.now(),
@@ -146,76 +164,98 @@ function addMatch(){
  });
  save();render();
 }
-
 function deleteMatch(id){
- if(!confirm("Delete this match?")) return;
+ if(!confirm("Delete match?"))return;
  matches=matches.filter(m=>m.id!==id);
- predictions=predictions.filter(p=>p.match!==id);
  save();render();
 }
-
 function submitScore(id){
- const aScore=document.getElementById(`sa-${id}`).value;
- const bScore=document.getElementById(`sb-${id}`).value;
- if(aScore===""||bScore==="") return alert("Enter scores");
-
- const match=matches.find(m=>m.id===id);
- match.scoreA=aScore;
- match.scoreB=bScore;
- match.result=
-  aScore>bScore?"Team A Wins":
-  bScore>aScore?"Team B Wins":"Draw";
- match.completed=true;
-
+ const sa=document.getElementById(`sa-${id}`).value;
+ const sb=document.getElementById(`sb-${id}`).value;
+ if(sa===""||sb==="")return alert("Enter scores");
+ const m=matches.find(x=>x.id===id);
+ m.scoreA=sa;m.scoreB=sb;
+ m.result=sa>sb?"Team A Wins":sb>sa?"Team B Wins":"Draw";
+ m.completed=true;
  save();render();
 }
 
+/* ================= SLIP ================= */
+function addToSlip(){
+ const id=matchSelect.value;
+ if(slip.some(s=>s.matchId==id)) return alert("Already added");
+ slip.push({
+  matchId:id,
+  prediction:predictionSelect.value
+ });
+ renderSlip();
+}
+function removeSlip(i){
+ slip.splice(i,1);
+ renderSlip();
+}
+function renderSlip(){
+ slip.innerHTML="";
+ const box=document.getElementById("slip");
+ box.innerHTML="";
+ slip.forEach((s,i)=>{
+  const m=matches.find(x=>x.id==s.matchId);
+  box.innerHTML+=`
+   <div class="slip-item">
+    ${m.a} vs ${m.b} → <strong>${s.prediction}</strong>
+    <button class="danger" onclick="removeSlip(${i})">Remove</button>
+   </div>`;
+ });
+}
+
+/* ================= BOOKING ================= */
+function submitBooking(){
+ if(slip.length===0) return alert("No match selected");
+ const code=bookingCode();
+ bookings[code]={
+  code,
+  name:name.value,
+  phone:phone.value,
+  amount:amount.value,
+  selections:slip,
+  paid:false,
+  time:new Date().toISOString()
+ };
+ save();
+ alert("Booking Code: "+code+"\nRedirecting to payment");
+ window.location.href=PAYMENT_LINK;
+}
+function loadBooking(){
+ const code=loadCode.value;
+ if(!bookings[code]) return alert("Booking not found");
+ slip=bookings[code].selections;
+ renderSlip();
+ alert("Booking loaded successfully");
+}
+
+/* ================= RENDER ================= */
 function render(){
  matchList.innerHTML="";
- matchId.innerHTML="";
-
+ matchSelect.innerHTML="";
  matches.forEach(m=>{
   const closed=new Date()>new Date(m.deadline)||m.completed;
-
   matchList.innerHTML+=`
    <div class="match-box">
     <strong>${m.a} vs ${m.b}</strong><br>
-    <small>Kickoff: ${new Date(m.kickoff).toLocaleString()}</small><br>
-    ${m.completed?`<strong>Final Score: ${m.scoreA} - ${m.scoreB}</strong>`:""}
-
+    <small>Kickoff: ${new Date(m.kickoff).toLocaleString()}</small>
+    ${m.completed?`<div><strong>Final: ${m.scoreA}-${m.scoreB}</strong></div>`:""}
     ${adminUnlocked?`
     <div class="admin-tools">
-     <input id="sa-${m.id}" type="number" placeholder="${m.a} score">
-     <input id="sb-${m.id}" type="number" placeholder="${m.b} score">
-     <button onclick="submitScore(${m.id})">Submit Result</button>
-     <button class="danger" onclick="deleteMatch(${m.id})">Delete Match</button>
+     <input id="sa-${m.id}" placeholder="${m.a}">
+     <input id="sb-${m.id}" placeholder="${m.b}">
+     <button onclick="submitScore(${m.id})">Submit Score</button>
+     <button class="danger" onclick="deleteMatch(${m.id})">Delete</button>
     </div>`:""}
    </div>`;
-
-  if(!closed){
-   matchId.innerHTML+=`<option value="${m.id}">${m.a} vs ${m.b}</option>`;
-  }
+  if(!closed)
+   matchSelect.innerHTML+=`<option value="${m.id}">${m.a} vs ${m.b}</option>`;
  });
 }
-
-predictForm.onsubmit=e=>{
- e.preventDefault();
- const m=matches.find(x=>x.id==matchId.value);
- if(!m||new Date()>new Date(m.deadline)||m.completed)
-  return alert("Predictions closed");
-
- predictions.push({
-  match:m.id,
-  name:name.value,
-  phone:phone.value,
-  prediction:prediction.value,
-  amount:amount.value
- });
- save();
- alert("Prediction submitted successfully! You will now be redirected to payment.");
-
-};
-
 render();
 </script>
 
