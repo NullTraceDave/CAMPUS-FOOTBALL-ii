@@ -9,7 +9,6 @@
 :root{
   --green:#065f46;
   --accent:#22c55e;
-  --bg:#ecfeff;
   --danger:#dc2626;
 }
 *{box-sizing:border-box;font-family:system-ui}
@@ -19,7 +18,6 @@ header{
   color:white;text-align:center;padding:1.8rem
 }
 header h1{margin:0;font-size:1.9rem}
-header p{margin:.3rem 0 0;font-size:.95rem}
 main{max-width:1000px;margin:auto;padding:1.2rem}
 .card{
   background:white;border-radius:16px;
@@ -35,15 +33,13 @@ button{
   margin-top:1rem;width:100%;
   padding:.85rem;border:none;border-radius:14px;
   background:linear-gradient(135deg,#16a34a,#22c55e);
-  color:white;font-size:1rem;font-weight:700;cursor:pointer
+  color:white;font-weight:700;cursor:pointer
 }
 button.secondary{background:#0f766e}
 button.danger{background:#dc2626}
-small{color:#64748b}
-.hidden{display:none}
 .match-box{border-bottom:1px solid #e5e7eb;padding:.7rem}
 .slip-item{padding:.6rem;border-bottom:1px dashed #e5e7eb}
-.admin-tools{margin-top:.5rem}
+.hidden{display:none}
 footer{text-align:center;font-size:.8rem;color:#64748b;padding:1rem}
 </style>
 </head>
@@ -51,20 +47,17 @@ footer{text-align:center;font-size:.8rem;color:#64748b;padding:1rem}
 <body>
 
 <header>
-  <h1>⚽ Campus Match Prediction</h1>
-  <p>Federal University Otuoke, Bayelsa State</p>
-  <small>FUO Campus Prediction Contest</small>
+  <h1>⚽ FUO Campus Match Prediction</h1>
+  <p>Federal University Otuoke</p>
 </header>
 
 <main>
 
-<!-- MATCHES -->
 <div class="card">
   <h2>Available Matches</h2>
   <div id="matchList"></div>
 </div>
 
-<!-- PREDICTION SLIP -->
 <div class="card">
   <h2>Prediction Slip</h2>
 
@@ -79,7 +72,6 @@ footer{text-align:center;font-size:.8rem;color:#64748b;padding:1rem}
   </select>
 
   <button onclick="addToSlip()">Add To Slip</button>
-
   <div id="slip"></div>
 
   <label>Full Name</label>
@@ -98,24 +90,22 @@ footer{text-align:center;font-size:.8rem;color:#64748b;padding:1rem}
   <button onclick="submitBooking()">Generate Booking Code & Pay</button>
 </div>
 
-<!-- LOAD BOOKING -->
 <div class="card">
-  <h2>Load Booking Code</h2>
+  <h2>Load Booking</h2>
   <input id="loadCode" placeholder="Enter booking code">
   <button class="secondary" onclick="loadBooking()">Load Slip</button>
 </div>
 
-<!-- ADMIN -->
 <div class="card">
   <h2>Admin Panel</h2>
-  <input id="adminPin" placeholder="Enter Admin PIN">
+  <input id="adminPin" placeholder="Admin PIN">
   <button class="secondary" onclick="unlockAdmin()">Unlock</button>
 
   <div id="adminArea" class="hidden">
     <label>Team A</label><input id="teamA">
     <label>Team B</label><input id="teamB">
     <label>Kickoff</label><input type="datetime-local" id="kickoff">
-    <label>Prediction Deadline</label><input type="datetime-local" id="deadline">
+    <label>Deadline</label><input type="datetime-local" id="deadline">
     <button onclick="addMatch()">Add Match</button>
   </div>
 </div>
@@ -126,137 +116,108 @@ footer{text-align:center;font-size:.8rem;color:#64748b;padding:1rem}
 © 2026 FUO Campus Prediction • Not a betting platform
 </footer>
 
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
 <script>
-/* ================= CONFIG ================= */
-const ADMIN_PIN="1234"; // CHANGE PIN HERE
-const PAYMENT_LINK="https://example.com/pay"; // PUT PAYSTACK / FLUTTERWAVE LINK
+const ADMIN_PIN="1234";
+const PAYMENT_LINK="https://example.com/pay";
+const FORM_ENDPOINT="https://formspree.io/f/xykeeyea";
 
-let adminUnlocked=false;
-let matches=JSON.parse(localStorage.getItem("matches")||"[]");
-let bookings=JSON.parse(localStorage.getItem("bookings")||"{}");
-let slip=[];
+firebase.initializeApp({
+ apiKey:"AIzaSyB5BB-snK8QEfFN0FiZPv7nNoTN10oC-jc",
+ authDomain:"fuo-campus-prediction.firebaseapp.com",
+ projectId:"fuo-campus-prediction"
+});
 
-/* ================= UTIL ================= */
-function save(){
- localStorage.setItem("matches",JSON.stringify(matches));
- localStorage.setItem("bookings",JSON.stringify(bookings));
-}
+const db=firebase.firestore();
+let slip=[],matches={};
+
 function bookingCode(){
  return "CP-"+Math.floor(100000+Math.random()*900000);
 }
 
-/* ================= ADMIN ================= */
 function unlockAdmin(){
  if(adminPin.value===ADMIN_PIN){
-  adminUnlocked=true;
   adminArea.classList.remove("hidden");
-  render();
  } else alert("Wrong PIN");
 }
+
 function addMatch(){
- matches.push({
-  id:Date.now(),
-  a:teamA.value,
-  b:teamB.value,
+ db.collection("matches").add({
+  teamA:teamA.value,
+  teamB:teamB.value,
   kickoff:kickoff.value,
-  deadline:deadline.value,
-  completed:false
+  deadline:deadline.value
  });
- save();render();
-}
-function deleteMatch(id){
- if(!confirm("Delete match?"))return;
- matches=matches.filter(m=>m.id!==id);
- save();render();
-}
-function submitScore(id){
- const sa=document.getElementById(`sa-${id}`).value;
- const sb=document.getElementById(`sb-${id}`).value;
- if(sa===""||sb==="")return alert("Enter scores");
- const m=matches.find(x=>x.id===id);
- m.scoreA=sa;m.scoreB=sb;
- m.result=sa>sb?"Team A Wins":sb>sa?"Team B Wins":"Draw";
- m.completed=true;
- save();render();
 }
 
-/* ================= SLIP ================= */
+db.collection("matches").onSnapshot(s=>{
+ matchList.innerHTML="";
+ matchSelect.innerHTML="";
+ matches={};
+
+ s.forEach(d=>{
+  const m=d.data(); matches[d.id]=m;
+  matchList.innerHTML+=`
+   <div class="match-box">
+    <strong>${m.teamA} vs ${m.teamB}</strong><br>
+    <small>${new Date(m.kickoff).toLocaleString()}</small>
+   </div>`;
+  if(new Date()<new Date(m.deadline))
+   matchSelect.innerHTML+=`<option value="${d.id}">${m.teamA} vs ${m.teamB}</option>`;
+ });
+});
+
 function addToSlip(){
  const id=matchSelect.value;
- if(slip.some(s=>s.matchId==id)) return alert("Already added");
- slip.push({
-  matchId:id,
-  prediction:predictionSelect.value
- });
+ if(!id||slip.some(s=>s.matchId===id))return;
+ slip.push({matchId:id,prediction:predictionSelect.value});
  renderSlip();
 }
-function removeSlip(i){
- slip.splice(i,1);
- renderSlip();
-}
+
 function renderSlip(){
  slip.innerHTML="";
- const box=document.getElementById("slip");
- box.innerHTML="";
+ slipBox=document.getElementById("slip");
+ slipBox.innerHTML="";
  slip.forEach((s,i)=>{
-  const m=matches.find(x=>x.id==s.matchId);
-  box.innerHTML+=`
+  const m=matches[s.matchId];
+  slipBox.innerHTML+=`
    <div class="slip-item">
-    ${m.a} vs ${m.b} → <strong>${s.prediction}</strong>
+    ${m.teamA} vs ${m.teamB} → <strong>${s.prediction}</strong>
     <button class="danger" onclick="removeSlip(${i})">Remove</button>
    </div>`;
  });
 }
 
-/* ================= BOOKING ================= */
-function submitBooking(){
- if(slip.length===0) return alert("No match selected");
- const code=bookingCode();
- bookings[code]={
-  code,
-  name:name.value,
-  phone:phone.value,
-  amount:amount.value,
-  selections:slip,
-  paid:false,
-  time:new Date().toISOString()
- };
- save();
- alert("Booking Code: "+code+"\nRedirecting to payment");
- window.location.href=PAYMENT_LINK;
-}
-function loadBooking(){
- const code=loadCode.value;
- if(!bookings[code]) return alert("Booking not found");
- slip=bookings[code].selections;
- renderSlip();
- alert("Booking loaded successfully");
-}
+function removeSlip(i){slip.splice(i,1);renderSlip();}
 
-/* ================= RENDER ================= */
-function render(){
- matchList.innerHTML="";
- matchSelect.innerHTML="";
- matches.forEach(m=>{
-  const closed=new Date()>new Date(m.deadline)||m.completed;
-  matchList.innerHTML+=`
-   <div class="match-box">
-    <strong>${m.a} vs ${m.b}</strong><br>
-    <small>Kickoff: ${new Date(m.kickoff).toLocaleString()}</small>
-    ${m.completed?`<div><strong>Final: ${m.scoreA}-${m.scoreB}</strong></div>`:""}
-    ${adminUnlocked?`
-    <div class="admin-tools">
-     <input id="sa-${m.id}" placeholder="${m.a}">
-     <input id="sb-${m.id}" placeholder="${m.b}">
-     <button onclick="submitScore(${m.id})">Submit Score</button>
-     <button class="danger" onclick="deleteMatch(${m.id})">Delete</button>
-    </div>`:""}
-   </div>`;
-  if(!closed)
-   matchSelect.innerHTML+=`<option value="${m.id}">${m.a} vs ${m.b}</option>`;
+function submitBooking(){
+ if(!slip.length||!name.value||!phone.value)return alert("Fill all fields");
+
+ const code=bookingCode();
+ const data={code,name:name.value,phone:phone.value,amount:amount.value,slip};
+
+ db.collection("bookings").doc(code).set(data).then(()=>{
+  const f=new FormData();
+  f.append("booking_code",code);
+  f.append("name",name.value);
+  f.append("phone",phone.value);
+  f.append("amount",amount.value);
+  f.append("predictions",JSON.stringify(slip));
+  fetch(FORM_ENDPOINT,{method:"POST",body:f});
+  alert("Booking Code: "+code);
+  location.href=PAYMENT_LINK;
  });
 }
-render();
+
+function loadBooking(){
+ db.collection("bookings").doc(loadCode.value).get().then(d=>{
+  if(!d.exists)return alert("Not found");
+  slip=d.data().slip;
+  renderSlip();
+ });
+}
 </script>
 
 </body>
